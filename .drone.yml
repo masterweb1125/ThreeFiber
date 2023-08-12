@@ -1,0 +1,158 @@
+kind: pipeline
+type: docker
+name: three-editor-Supercoder
+
+steps:
+  - name: build_dev
+    image: node:16-alpine
+    commands:
+      - "yarn install"
+      - "yarn build"
+    when:
+      branch: 
+        - develop
+
+  - name: build_prod
+    image: node:16-alpine
+    commands:
+      - "yarn install"
+      - "yarn build"
+    when:
+      event: 
+        - tag
+
+  - name: docker_dev
+    image: plugins/docker:latest
+    settings:
+      username: 100027609549
+      password:
+        from_secret: docker_registry_password_tencent
+      repo: ccr.ccs.tencentyun.com/snapano/snapano-supercode
+      tags: develop
+      registry: ccr.ccs.tencentyun.com
+    when:
+      branch: 
+        - develop
+
+  - name: docker_prod
+    image: plugins/docker:latest
+    settings:
+      username: 100027609549
+      password:
+        from_secret: docker_registry_password_tencent
+      repo: hkccr.ccs.tencentyun.com/snapano/snapano-supercode
+      tags: latest
+      registry: hkccr.ccs.tencentyun.com
+    when:
+      event: 
+        - tag
+
+  - name: deploy_dev
+    image: appleboy/drone-ssh:latest
+    settings:
+      host:
+        - snapano-dev.54np.com
+      username: drone
+      password:
+        from_secret: drone_ssh_password_dev
+      port: 22
+      command_timeout: 5m
+      script:
+        - docker stack deploy --with-registry-auth --compose-file /home/np/env/snapano/swarm/dev/compose/app.yaml app
+    when:
+      branch: 
+        - develop
+
+  - name: deploy_prod
+    image: appleboy/drone-ssh:latest
+    settings:
+      host:
+        - snapano-h02.54np.com
+      username: drone
+      password:
+        from_secret: drone_ssh_password_dev
+      port: 22
+      command_timeout: 5m
+      script:
+        - docker stack deploy --with-registry-auth --compose-file /home/np/env/snapano/swarm/demo/compose/app.yaml app
+    when:
+      event: 
+        - tag
+
+# trigger:
+#   branch:
+#     - main
+#   event:
+#     - push
+# steps:
+
+#   # 使用缓存
+#   - name: restore-cache
+#     image: drillster/drone-volume-cache
+#     settings:
+#       restore: true
+#       mount:
+#         - ./node_modules
+#     volumes:
+#       - name: node_cache
+#         path: /cache
+
+
+#   # 打包
+#   - name: build
+#     image: node:16
+#     commands:
+#       - node -v
+#       - npm -v
+#       - npm config set registry https://registry.npm.taobao.org -g
+#       - npm config set sass_binary_site https://npm.taobao.org/mirrors/node-sass/ -g
+#       - npm install
+#       - npm run build
+#       - cp -r ./build/* /usr/share/node 
+#     volumes:
+#       - name: build
+#         path: /usr/share/node 
+
+#   # 更新缓存
+#   - name: rebuild-cache
+#     image: drillster/drone-volume-cache
+#     settings:
+#       rebuild: true
+#       mount:
+#         - ./node_modules
+#     volumes:
+#       - name: node_cache
+#         path: /cache
+
+
+
+  # # 部署
+  # - name: deploy
+  #   # image: appleboy/drone-ssh
+  #   image: appleboy/drone-scp
+  #   settings:
+  #     host:
+  #       from_secret: ssh_ip # 这里就是上面配的secret，也可以明文
+  #     username: root # 登录名
+  #     password: 
+  #       from_secret: ssh_password # 登录密码
+  #     command_timeout: 3m
+  #     # 设置要将打包户的文件部署到的文件地址
+  #     target: /opt/snapano/public/supercode # 把项目拷贝到target目录
+  #     source: build/* # 打包后的那个目录
+  #     rm: true
+  #     strip_components: 1
+      
+  #   when:
+  #     status:
+  #       - success  
+
+
+
+# volumes:
+#   - name: node_cache
+#     host:
+#       path: /data/node
+#   - name: build
+#     host:
+#       path: /opt/snapano/public/supercode
